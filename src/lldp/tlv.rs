@@ -269,6 +269,7 @@ impl ChassisId {
 
 #[derive(Debug, Clone)]
 pub enum PortId {
+  MacAddress(MacAddress),
   InterfaceName(String),
 }
 
@@ -281,6 +282,15 @@ impl PortId {
     let subtype = buf[0];
     match subtype {
       LLDP_PORTID_SUBTYPE_IFNAME => Ok(PortId::InterfaceName(String::from_utf8(buf[1..].into())?)),
+
+      LLDP_PORTID_SUBTYPE_LLADDR => match buf.len().cmp(&7) {
+        Ordering::Less => Err(TlvDecodeError::BufferTooShort),
+        Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
+        Ordering::Equal => {
+          let mac = buf[1..7].try_into().unwrap();
+          Ok(PortId::MacAddress(MacAddress(mac)))
+        }
+      },
 
       x => Err(TlvDecodeError::UnknownPortIdSubtype(x)),
     }
