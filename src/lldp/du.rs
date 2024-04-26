@@ -4,7 +4,9 @@ use thiserror::Error;
 use tracing::warn;
 
 use super::tlv::{
-  decode_list, org::dot1, Capabilities, ChassisId, ManagementAddress, OrgTlv, PortId, RawTlvError, Tlv,
+  decode_list,
+  org::{dot1, dot3},
+  Capabilities, ChassisId, ManagementAddress, OrgTlv, PortId, RawTlvError, Tlv,
 };
 
 #[derive(Debug, Clone, Error)]
@@ -35,12 +37,14 @@ pub struct DataUnit<'a> {
 #[derive(Debug, Clone, Default)]
 pub struct Org<'a> {
   pub dot1: Dot1<'a>,
+  pub dot3: Dot3,
 }
 
 impl<'a> Org<'a> {
   pub fn to_static(self) -> Org<'static> {
     Org {
       dot1: self.dot1.to_static(),
+      dot3: self.dot3,
     }
   }
 }
@@ -62,6 +66,11 @@ impl<'a> Dot1<'a> {
         .collect(),
     }
   }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Dot3 {
+  pub mac_phy_status: Option<dot3::MacPhyStatus>,
 }
 
 impl<'a> DataUnit<'a> {
@@ -159,6 +168,13 @@ impl<'a> DataUnit<'a> {
         }
 
         Tlv::Org(OrgTlv::Dot1(dot1::Tlv::VlanName(x, y))) => org.dot1.vlan_name.push((x, y)),
+
+        Tlv::Org(OrgTlv::Dot3(dot3::Tlv::MacPhyStatus(new))) => {
+          if let Some(old) = org.dot3.mac_phy_status.take() {
+            warn!(?old, ?new, "duplicate mac/phy status");
+          }
+          org.dot3.mac_phy_status = Some(new);
+        }
 
         _ => {}
       }
