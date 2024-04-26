@@ -182,6 +182,8 @@ pub enum TlvDecodeError {
   UnknownChassisIdSubtype(u8),
   #[error("unknown port id subtype '{0}'")]
   UnknownPortIdSubtype(u8),
+  #[error("unknown management interface subtype '{0}'")]
+  UnknownManagementInterfaceSubtype(u8),
   #[error("unknown tlv '{0}'")]
   UnknownTlv(u8),
 }

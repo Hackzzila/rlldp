@@ -1,10 +1,12 @@
-use std::cmp::Ordering;
+use std::{borrow::Cow, cmp::Ordering};
 
 use crate::lldp::tlv::NetworkAddress;
 
 use super::TlvDecodeError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ManagementInterfaceKind {
+  Unknown,
   IfIndex,
   SysPort,
 }
@@ -13,6 +15,7 @@ impl TryFrom<u8> for ManagementInterfaceKind {
   type Error = u8;
   fn try_from(value: u8) -> Result<Self, u8> {
     match value {
+      1 => Ok(Self::Unknown),
       2 => Ok(Self::IfIndex),
       3 => Ok(Self::SysPort),
       x => Err(x),
@@ -23,6 +26,7 @@ impl TryFrom<u8> for ManagementInterfaceKind {
 impl From<ManagementInterfaceKind> for u8 {
   fn from(value: ManagementInterfaceKind) -> Self {
     match value {
+      ManagementInterfaceKind::Unknown => 1,
       ManagementInterfaceKind::IfIndex => 2,
       ManagementInterfaceKind::SysPort => 3,
     }
@@ -32,8 +36,9 @@ impl From<ManagementInterfaceKind> for u8 {
 #[derive(Debug, Clone)]
 pub struct ManagementAddress<'a> {
   pub address: NetworkAddress<'a>,
-  pub interface_subtype: u8,
+  pub interface_subtype: ManagementInterfaceKind,
   pub interface_number: u32,
+  pub oid: Cow<'a, str>,
 }
 
 impl<'a> ManagementAddress<'a> {
@@ -42,6 +47,7 @@ impl<'a> ManagementAddress<'a> {
       address: self.address.to_static(),
       interface_subtype: self.interface_subtype,
       interface_number: self.interface_number,
+      oid: Cow::Owned(self.oid.into_owned()),
     }
   }
 
@@ -56,26 +62,32 @@ impl<'a> ManagementAddress<'a> {
       return Err(TlvDecodeError::BufferTooShort);
     }
 
-    let addr_length = addr_str_length - 1;
-    let address = NetworkAddress::parse(&buf[1..2 + addr_length])?;
+    let address = NetworkAddress::parse(&buf[1..1 + addr_str_length])?;
 
-    dbg!(buf.len());
-    dbg!(addr_str_length);
+    let buf = &buf[1 + addr_str_length..];
 
-    match buf.len().cmp(&(1 + addr_str_length + 6)) {
+    if buf.len() < 6 {
+      return Err(TlvDecodeError::BufferTooShort);
+    }
+
+    let interface_subtype = buf[0]
+      .try_into()
+      .map_err(TlvDecodeError::UnknownManagementInterfaceSubtype)?;
+
+    let interface_number = buf[1..5].try_into().unwrap();
+
+    let oid_len = buf[5] as usize;
+    let buf = &buf[6..];
+
+    match buf.len().cmp(&oid_len) {
       Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
       Ordering::Less => Err(TlvDecodeError::BufferTooShort),
-      Ordering::Equal => {
-        let interface_subtype = buf[1 + addr_str_length];
-        let interface_number = buf[1 + addr_str_length + 1..1 + addr_str_length + 5]
-          .try_into()
-          .unwrap();
-        Ok(ManagementAddress {
-          address,
-          interface_subtype,
-          interface_number: u32::from_be_bytes(interface_number),
-        })
-      }
+      Ordering::Equal => Ok(ManagementAddress {
+        address,
+        interface_subtype,
+        interface_number: u32::from_be_bytes(interface_number),
+        oid: String::from_utf8_lossy(buf),
+      }),
     }
   }
 }
