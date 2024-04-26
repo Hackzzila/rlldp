@@ -20,7 +20,7 @@ pub enum DataUnitError {
 #[derive(Debug, Clone)]
 pub struct DataUnit<'a> {
   pub chassis_id: ChassisId,
-  pub port_id: PortId,
+  pub port_id: PortId<'a>,
   pub time_to_live: u16,
   pub port_description: Option<Cow<'a, str>>,
   pub system_name: Option<Cow<'a, str>>,

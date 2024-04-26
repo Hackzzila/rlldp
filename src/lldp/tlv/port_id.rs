@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{borrow::Cow, cmp::Ordering};
 
 use crate::MacAddress;
 
@@ -45,12 +45,12 @@ impl From<PortIdKind> for u8 {
 }
 
 #[derive(Debug, Clone)]
-pub enum PortId {
+pub enum PortId<'a> {
   MacAddress(MacAddress),
-  InterfaceName(String),
+  InterfaceName(Cow<'a, str>),
 }
 
-impl PortId {
+impl<'a> PortId<'a> {
   pub fn kind(&self) -> PortIdKind {
     match self {
       Self::MacAddress(_) => PortIdKind::LlAddr,
@@ -58,14 +58,21 @@ impl PortId {
     }
   }
 
-  pub(super) fn decode(buf: &[u8]) -> Result<Self, TlvDecodeError> {
+  pub fn to_static(self) -> PortId<'static> {
+    match self {
+      Self::MacAddress(x) => PortId::MacAddress(x),
+      Self::InterfaceName(x) => PortId::InterfaceName(Cow::Owned(x.into_owned())),
+    }
+  }
+
+  pub(super) fn decode(buf: &'a [u8]) -> Result<Self, TlvDecodeError> {
     if buf.is_empty() {
       return Err(TlvDecodeError::BufferTooShort);
     }
 
     let subtype = buf[0].try_into().map_err(TlvDecodeError::UnknownPortIdSubtype)?;
     match subtype {
-      PortIdKind::IfName => Ok(PortId::InterfaceName(String::from_utf8(buf[1..].into())?)),
+      PortIdKind::IfName => Ok(PortId::InterfaceName(String::from_utf8_lossy(buf[1..].into()))),
 
       PortIdKind::LlAddr => match buf.len().cmp(&7) {
         Ordering::Less => Err(TlvDecodeError::BufferTooShort),

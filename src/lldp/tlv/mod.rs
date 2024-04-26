@@ -119,7 +119,7 @@ impl<'a> RawTlv<'a> {
 pub enum Tlv<'a> {
   End,
   ChassisId(ChassisId),
-  PortId(PortId),
+  PortId(PortId<'a>),
   TimeToLive(u16),
   PortDescription(Cow<'a, str>),
   SystemName(Cow<'a, str>),
@@ -134,7 +134,7 @@ impl<'a> Tlv<'a> {
     match self {
       Self::End => Tlv::End,
       Self::ChassisId(x) => Tlv::ChassisId(x),
-      Self::PortId(x) => Tlv::PortId(x),
+      Self::PortId(x) => Tlv::PortId(x.to_static()),
       Self::TimeToLive(x) => Tlv::TimeToLive(x),
       Self::PortDescription(x) => Tlv::PortDescription(Cow::Owned(x.into_owned())),
       Self::SystemName(x) => Tlv::SystemName(Cow::Owned(x.into_owned())),
