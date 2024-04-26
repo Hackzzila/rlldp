@@ -160,11 +160,11 @@ impl<'a> Tlv<'a> {
       Self::End => Tlv::End,
       Self::ChassisId(x) => Tlv::ChassisId(x.clone()),
       Self::PortId(x) => Tlv::PortId(x.clone()),
-      Self::TimeToLive(x) => Tlv::TimeToLive(x.clone()),
+      Self::TimeToLive(x) => Tlv::TimeToLive(*x),
       Self::PortDescription(x) => Tlv::PortDescription(Cow::Owned(x.clone().into_owned())),
       Self::SystemName(x) => Tlv::SystemName(Cow::Owned(x.clone().into_owned())),
       Self::SystemDescription(x) => Tlv::SystemDescription(Cow::Owned(x.clone().into_owned())),
-      Self::Capabilities(x) => Tlv::Capabilities(x.clone()),
+      Self::Capabilities(x) => Tlv::Capabilities(*x),
       Self::ManagementAddress(x) => Tlv::ManagementAddress(x.clone()),
       Self::Org(x) => Tlv::Org(x.clone()),
     }
