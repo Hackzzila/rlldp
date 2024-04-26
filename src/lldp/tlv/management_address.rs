@@ -1,34 +1,8 @@
-use std::{
-  cmp::Ordering,
-  net::{IpAddr, Ipv4Addr, Ipv6Addr},
-};
+use std::cmp::Ordering;
+
+use crate::lldp::tlv::Address;
 
 use super::TlvDecodeError;
-
-pub enum ManagementAddressKind {
-  Ipv4,
-  Ipv6,
-}
-
-impl TryFrom<u8> for ManagementAddressKind {
-  type Error = u8;
-  fn try_from(value: u8) -> Result<Self, u8> {
-    match value {
-      1 => Ok(Self::Ipv4),
-      2 => Ok(Self::Ipv6),
-      x => Err(x),
-    }
-  }
-}
-
-impl From<ManagementAddressKind> for u8 {
-  fn from(value: ManagementAddressKind) -> Self {
-    match value {
-      ManagementAddressKind::Ipv4 => 1,
-      ManagementAddressKind::Ipv6 => 2,
-    }
-  }
-}
 
 pub enum ManagementInterfaceKind {
   IfIndex,
@@ -56,20 +30,22 @@ impl From<ManagementInterfaceKind> for u8 {
 }
 
 #[derive(Debug, Clone)]
-pub struct ManagementAddress {
-  pub address: Address,
+pub struct ManagementAddress<'a> {
+  pub address: Address<'a>,
   pub interface_subtype: u8,
   pub interface_number: u32,
 }
 
-#[derive(Debug, Clone)]
-pub enum Address {
-  Ip(IpAddr),
-  Other(Vec<u8>),
-}
+impl<'a> ManagementAddress<'a> {
+  pub fn to_static(self) -> ManagementAddress<'static> {
+    ManagementAddress {
+      address: self.address.to_static(),
+      interface_subtype: self.interface_subtype,
+      interface_number: self.interface_number,
+    }
+  }
 
-impl ManagementAddress {
-  pub(super) fn decode(buf: &[u8]) -> Result<Self, TlvDecodeError> {
+  pub(super) fn decode(buf: &'a [u8]) -> Result<Self, TlvDecodeError> {
     if buf.is_empty() {
       return Err(TlvDecodeError::BufferTooShort);
     }
@@ -80,25 +56,8 @@ impl ManagementAddress {
       return Err(TlvDecodeError::BufferTooShort);
     }
 
-    let addr_family = buf[1];
     let addr_length = addr_str_length - 1;
-    let addr_bytes: Vec<u8> = buf[2..2 + addr_length].into();
-
-    let address = match addr_family.try_into() {
-      Ok(ManagementAddressKind::Ipv4) => Address::Ip(IpAddr::V4(Ipv4Addr::new(
-        addr_bytes[0],
-        addr_bytes[1],
-        addr_bytes[2],
-        addr_bytes[3],
-      ))),
-
-      Ok(ManagementAddressKind::Ipv6) => {
-        let arr: [u8; 16] = addr_bytes[0..16].try_into().unwrap();
-        Address::Ip(IpAddr::V6(Ipv6Addr::from(arr)))
-      }
-
-      Err(_) => Address::Other(addr_bytes),
-    };
+    let address = Address::parse(&buf[1..2 + addr_length])?;
 
     dbg!(buf.len());
     dbg!(addr_str_length);

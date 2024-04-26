@@ -3,6 +3,9 @@ use std::{borrow::Cow, cmp::Ordering};
 use thiserror::Error;
 use tracing::warn;
 
+mod address;
+pub use address::*;
+
 mod chassis_id;
 pub use chassis_id::*;
 
@@ -118,14 +121,14 @@ impl<'a> RawTlv<'a> {
 #[derive(Debug, Clone)]
 pub enum Tlv<'a> {
   End,
-  ChassisId(ChassisId),
+  ChassisId(ChassisId<'a>),
   PortId(PortId<'a>),
   TimeToLive(u16),
   PortDescription(Cow<'a, str>),
   SystemName(Cow<'a, str>),
   SystemDescription(Cow<'a, str>),
   Capabilities(Capabilities),
-  ManagementAddress(ManagementAddress),
+  ManagementAddress(ManagementAddress<'a>),
   Org(OrgTlv<'a>),
 }
 
@@ -133,14 +136,14 @@ impl<'a> Tlv<'a> {
   pub fn to_static(self) -> Tlv<'static> {
     match self {
       Self::End => Tlv::End,
-      Self::ChassisId(x) => Tlv::ChassisId(x),
+      Self::ChassisId(x) => Tlv::ChassisId(x.to_static()),
       Self::PortId(x) => Tlv::PortId(x.to_static()),
       Self::TimeToLive(x) => Tlv::TimeToLive(x),
       Self::PortDescription(x) => Tlv::PortDescription(Cow::Owned(x.into_owned())),
       Self::SystemName(x) => Tlv::SystemName(Cow::Owned(x.into_owned())),
       Self::SystemDescription(x) => Tlv::SystemDescription(Cow::Owned(x.into_owned())),
       Self::Capabilities(x) => Tlv::Capabilities(x),
-      Self::ManagementAddress(x) => Tlv::ManagementAddress(x),
+      Self::ManagementAddress(x) => Tlv::ManagementAddress(x.to_static()),
       Self::Org(x) => Tlv::Org(x.to_static()),
     }
   }

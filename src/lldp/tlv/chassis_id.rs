@@ -1,8 +1,8 @@
-use std::cmp::Ordering;
+use std::{borrow::Cow, cmp::Ordering};
 
 use crate::MacAddress;
 
-use super::TlvDecodeError;
+use super::{Address, TlvDecodeError};
 
 pub enum ChassisIdKind {
   Chassis,
@@ -45,34 +45,65 @@ impl From<ChassisIdKind> for u8 {
 }
 
 #[derive(Debug, Clone)]
-pub enum ChassisId {
+pub enum ChassisId<'a> {
+  Chassis(Cow<'a, str>),
+  InterfaceAlias(Cow<'a, str>),
+  PortComponent(Cow<'a, str>),
   MacAddress(MacAddress),
+  Address(Address<'a>),
+  InterfaceName(Cow<'a, str>),
+  Local(Cow<'a, str>),
 }
 
-impl ChassisId {
+impl<'a> ChassisId<'a> {
   pub fn kind(&self) -> ChassisIdKind {
     match self {
+      Self::Chassis(_) => ChassisIdKind::Chassis,
+      Self::InterfaceAlias(_) => ChassisIdKind::IfAlias,
+      Self::PortComponent(_) => ChassisIdKind::Port,
       Self::MacAddress(_) => ChassisIdKind::LlAddr,
+      Self::Address(_) => ChassisIdKind::Addr,
+      Self::InterfaceName(_) => ChassisIdKind::IfName,
+      Self::Local(_) => ChassisIdKind::Local,
     }
   }
 
-  pub(super) fn decode(buf: &[u8]) -> Result<Self, TlvDecodeError> {
+  pub fn to_static(self) -> ChassisId<'static> {
+    match self {
+      Self::Chassis(x) => ChassisId::Chassis(Cow::Owned(x.into_owned())),
+      Self::InterfaceAlias(x) => ChassisId::InterfaceAlias(Cow::Owned(x.into_owned())),
+      Self::PortComponent(x) => ChassisId::PortComponent(Cow::Owned(x.into_owned())),
+      Self::MacAddress(x) => ChassisId::MacAddress(x),
+      Self::Address(x) => ChassisId::Address(x.to_static()),
+      Self::InterfaceName(x) => ChassisId::InterfaceAlias(Cow::Owned(x.into_owned())),
+      Self::Local(x) => ChassisId::Local(Cow::Owned(x.into_owned())),
+    }
+  }
+
+  pub(super) fn decode(buf: &'a [u8]) -> Result<Self, TlvDecodeError> {
     if buf.is_empty() {
       return Err(TlvDecodeError::BufferTooShort);
     }
 
     let subtype = buf[0].try_into().map_err(TlvDecodeError::UnknownChassisIdSubtype)?;
+    let buf = &buf[1..];
     match subtype {
-      ChassisIdKind::LlAddr => match buf.len().cmp(&7) {
+      ChassisIdKind::Chassis => Ok(ChassisId::Chassis(String::from_utf8_lossy(buf))),
+      ChassisIdKind::IfAlias => Ok(ChassisId::InterfaceAlias(String::from_utf8_lossy(buf))),
+      ChassisIdKind::Port => Ok(ChassisId::PortComponent(String::from_utf8_lossy(buf))),
+      ChassisIdKind::IfName => Ok(ChassisId::InterfaceName(String::from_utf8_lossy(buf))),
+      ChassisIdKind::Local => Ok(ChassisId::Local(String::from_utf8_lossy(buf))),
+
+      ChassisIdKind::Addr => Ok(ChassisId::Address(Address::parse(buf)?)),
+
+      ChassisIdKind::LlAddr => match buf.len().cmp(&6) {
         Ordering::Less => Err(TlvDecodeError::BufferTooShort),
         Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
         Ordering::Equal => {
-          let mac = buf[1..7].try_into().unwrap();
+          let mac = buf[0..6].try_into().unwrap();
           Ok(ChassisId::MacAddress(MacAddress(mac)))
         }
       },
-
-      x => Err(TlvDecodeError::UnknownChassisIdSubtype(x.into())),
     }
   }
 }
