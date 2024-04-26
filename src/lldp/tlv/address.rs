@@ -6,13 +6,13 @@ use std::{
 
 use super::TlvDecodeError;
 
-pub enum AddressKind {
+pub enum NetworkAddressKind {
   Ipv4,
   Ipv6,
   Unknown(u8),
 }
 
-impl From<u8> for AddressKind {
+impl From<u8> for NetworkAddressKind {
   fn from(value: u8) -> Self {
     match value {
       1 => Self::Ipv4,
@@ -22,35 +22,35 @@ impl From<u8> for AddressKind {
   }
 }
 
-impl From<AddressKind> for u8 {
-  fn from(value: AddressKind) -> Self {
+impl From<NetworkAddressKind> for u8 {
+  fn from(value: NetworkAddressKind) -> Self {
     match value {
-      AddressKind::Ipv4 => 1,
-      AddressKind::Ipv6 => 2,
-      AddressKind::Unknown(x) => x,
+      NetworkAddressKind::Ipv4 => 1,
+      NetworkAddressKind::Ipv6 => 2,
+      NetworkAddressKind::Unknown(x) => x,
     }
   }
 }
 
 #[derive(Debug, Clone)]
-pub enum Address<'a> {
+pub enum NetworkAddress<'a> {
   Ip(IpAddr),
   Other(u8, Cow<'a, [u8]>),
 }
 
-impl<'a> Address<'a> {
-  pub fn kind(&self) -> AddressKind {
+impl<'a> NetworkAddress<'a> {
+  pub fn kind(&self) -> NetworkAddressKind {
     match self {
-      Self::Ip(IpAddr::V4(_)) => AddressKind::Ipv4,
-      Self::Ip(IpAddr::V6(_)) => AddressKind::Ipv6,
-      Self::Other(kind, _) => AddressKind::Unknown(*kind),
+      Self::Ip(IpAddr::V4(_)) => NetworkAddressKind::Ipv4,
+      Self::Ip(IpAddr::V6(_)) => NetworkAddressKind::Ipv6,
+      Self::Other(kind, _) => NetworkAddressKind::Unknown(*kind),
     }
   }
 
-  pub fn to_static(self) -> Address<'static> {
+  pub fn to_static(self) -> NetworkAddress<'static> {
     match self {
-      Self::Ip(x) => Address::Ip(x),
-      Self::Other(x, y) => Address::Other(x, Cow::Owned(y.into_owned())),
+      Self::Ip(x) => NetworkAddress::Ip(x),
+      Self::Other(x, y) => NetworkAddress::Other(x, Cow::Owned(y.into_owned())),
     }
   }
 
@@ -63,22 +63,24 @@ impl<'a> Address<'a> {
     let buf = &buf[1..];
 
     match subtype {
-      AddressKind::Ipv4 => match buf.len().cmp(&4) {
+      NetworkAddressKind::Ipv4 => match buf.len().cmp(&4) {
         Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
         Ordering::Less => Err(TlvDecodeError::BufferTooShort),
-        Ordering::Equal => Ok(Address::Ip(IpAddr::V4(Ipv4Addr::new(buf[0], buf[1], buf[2], buf[3])))),
+        Ordering::Equal => Ok(NetworkAddress::Ip(IpAddr::V4(Ipv4Addr::new(
+          buf[0], buf[1], buf[2], buf[3],
+        )))),
       },
 
-      AddressKind::Ipv6 => match buf.len().cmp(&16) {
+      NetworkAddressKind::Ipv6 => match buf.len().cmp(&16) {
         Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
         Ordering::Less => Err(TlvDecodeError::BufferTooShort),
         Ordering::Equal => {
           let arr: [u8; 16] = buf[0..16].try_into().unwrap();
-          Ok(Address::Ip(IpAddr::V6(Ipv6Addr::from(arr))))
+          Ok(NetworkAddress::Ip(IpAddr::V6(Ipv6Addr::from(arr))))
         }
       },
 
-      AddressKind::Unknown(x) => Ok(Address::Other(x, Cow::Borrowed(buf))),
+      NetworkAddressKind::Unknown(x) => Ok(NetworkAddress::Other(x, Cow::Borrowed(buf))),
     }
   }
 }

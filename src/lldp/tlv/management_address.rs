@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::lldp::tlv::Address;
+use crate::lldp::tlv::NetworkAddress;
 
 use super::TlvDecodeError;
 
@@ -31,7 +31,7 @@ impl From<ManagementInterfaceKind> for u8 {
 
 #[derive(Debug, Clone)]
 pub struct ManagementAddress<'a> {
-  pub address: Address<'a>,
+  pub address: NetworkAddress<'a>,
   pub interface_subtype: u8,
   pub interface_number: u32,
 }
@@ -57,7 +57,7 @@ impl<'a> ManagementAddress<'a> {
     }
 
     let addr_length = addr_str_length - 1;
-    let address = Address::parse(&buf[1..2 + addr_length])?;
+    let address = NetworkAddress::parse(&buf[1..2 + addr_length])?;
 
     dbg!(buf.len());
     dbg!(addr_str_length);

@@ -2,7 +2,7 @@ use std::{borrow::Cow, cmp::Ordering};
 
 use crate::MacAddress;
 
-use super::{Address, TlvDecodeError};
+use super::{NetworkAddress, TlvDecodeError};
 
 pub enum ChassisIdKind {
   Chassis,
@@ -50,7 +50,7 @@ pub enum ChassisId<'a> {
   InterfaceAlias(Cow<'a, str>),
   PortComponent(Cow<'a, str>),
   MacAddress(MacAddress),
-  Address(Address<'a>),
+  NetworkAddress(NetworkAddress<'a>),
   InterfaceName(Cow<'a, str>),
   Local(Cow<'a, str>),
 }
@@ -62,7 +62,7 @@ impl<'a> ChassisId<'a> {
       Self::InterfaceAlias(_) => ChassisIdKind::IfAlias,
       Self::PortComponent(_) => ChassisIdKind::Port,
       Self::MacAddress(_) => ChassisIdKind::LlAddr,
-      Self::Address(_) => ChassisIdKind::Addr,
+      Self::NetworkAddress(_) => ChassisIdKind::Addr,
       Self::InterfaceName(_) => ChassisIdKind::IfName,
       Self::Local(_) => ChassisIdKind::Local,
     }
@@ -74,7 +74,7 @@ impl<'a> ChassisId<'a> {
       Self::InterfaceAlias(x) => ChassisId::InterfaceAlias(Cow::Owned(x.into_owned())),
       Self::PortComponent(x) => ChassisId::PortComponent(Cow::Owned(x.into_owned())),
       Self::MacAddress(x) => ChassisId::MacAddress(x),
-      Self::Address(x) => ChassisId::Address(x.to_static()),
+      Self::NetworkAddress(x) => ChassisId::NetworkAddress(x.to_static()),
       Self::InterfaceName(x) => ChassisId::InterfaceAlias(Cow::Owned(x.into_owned())),
       Self::Local(x) => ChassisId::Local(Cow::Owned(x.into_owned())),
     }
@@ -94,7 +94,7 @@ impl<'a> ChassisId<'a> {
       ChassisIdKind::IfName => Ok(ChassisId::InterfaceName(String::from_utf8_lossy(buf))),
       ChassisIdKind::Local => Ok(ChassisId::Local(String::from_utf8_lossy(buf))),
 
-      ChassisIdKind::Addr => Ok(ChassisId::Address(Address::parse(buf)?)),
+      ChassisIdKind::Addr => Ok(ChassisId::NetworkAddress(NetworkAddress::parse(buf)?)),
 
       ChassisIdKind::LlAddr => match buf.len().cmp(&6) {
         Ordering::Less => Err(TlvDecodeError::BufferTooShort),
