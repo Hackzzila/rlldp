@@ -21,6 +21,7 @@ pub use management_address::*;
 pub mod org;
 pub use org::{CustomOrgTlv, OrgTlv};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TlvKind {
   End,
   ChassisId,

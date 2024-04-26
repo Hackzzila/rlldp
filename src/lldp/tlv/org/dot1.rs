@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use crate::lldp::tlv::TlvDecodeError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TlvKind {
   Pvid,
   Ppvid,

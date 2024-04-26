@@ -6,6 +6,7 @@ use std::{
 
 use super::TlvDecodeError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NetworkAddressKind {
   Ipv4,
   Ipv6,

@@ -4,6 +4,7 @@ use crate::MacAddress;
 
 use super::{NetworkAddress, TlvDecodeError};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PortIdKind {
   IfAlias,
   Port,

@@ -1,5 +1,6 @@
 use crate::lldp::tlv::TlvDecodeError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TlvKind {
   Mac,
   Power,

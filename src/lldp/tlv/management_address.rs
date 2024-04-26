@@ -4,7 +4,7 @@ use crate::lldp::tlv::NetworkAddress;
 
 use super::TlvDecodeError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ManagementInterfaceKind {
   Unknown,
   IfIndex,
