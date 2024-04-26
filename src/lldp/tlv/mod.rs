@@ -15,6 +15,9 @@ pub use system_capabilities::*;
 mod management_address;
 pub use management_address::*;
 
+pub mod org;
+pub use org::{CustomOrgTlv, OrgTlv};
+
 pub enum TlvKind {
   End,
   ChassisId,
@@ -63,19 +66,6 @@ impl From<TlvKind> for u8 {
     }
   }
 }
-
-const LLDP_TLV_DOT1_PVID: u8 = 1;
-const LLDP_TLV_DOT1_PPVID: u8 = 2;
-const LLDP_TLV_DOT1_VLANNAME: u8 = 3;
-const LLDP_TLV_DOT1_PI: u8 = 4;
-
-const LLDP_TLV_DOT3_MAC: u8 = 1;
-const LLDP_TLV_DOT3_POWER: u8 = 2;
-const LLDP_TLV_DOT3_LA: u8 = 3;
-const LLDP_TLV_DOT3_MFS: u8 = 4;
-
-const LLDP_TLV_ORG_DOT1: [u8; 3] = [0x00, 0x80, 0xc2];
-const LLDP_TLV_ORG_DOT3: [u8; 3] = [0x00, 0x12, 0x0f];
 
 pub fn decode_list(mut buf: &[u8]) -> Result<Vec<Tlv>, RawTlvError> {
   let mut out = Vec::new();
@@ -136,7 +126,7 @@ pub enum Tlv<'a> {
   SystemDescription(Cow<'a, str>),
   Capabilities(Capabilities),
   ManagementAddress(ManagementAddress),
-  Org(OrgTlv),
+  Org(OrgTlv<'a>),
 }
 
 impl<'a> Tlv<'a> {
@@ -151,7 +141,7 @@ impl<'a> Tlv<'a> {
       Self::SystemDescription(x) => Tlv::SystemDescription(Cow::Owned(x.into_owned())),
       Self::Capabilities(x) => Tlv::Capabilities(x),
       Self::ManagementAddress(x) => Tlv::ManagementAddress(x),
-      Self::Org(x) => Tlv::Org(x),
+      Self::Org(x) => Tlv::Org(x.to_static()),
     }
   }
 
@@ -171,20 +161,6 @@ impl<'a> Tlv<'a> {
   }
 }
 
-#[derive(Debug, Clone)]
-pub enum OrgTlv {
-  Ieee802Dot1(Ieee802Dot1Tlv),
-  Ieee802Dot3(Ieee802Dot3Tlv),
-}
-
-#[derive(Debug, Clone)]
-pub enum Ieee802Dot1Tlv {
-  PortVlanId(u16),
-}
-
-#[derive(Debug, Clone)]
-pub enum Ieee802Dot3Tlv {}
-
 #[derive(Debug, Clone, Error)]
 pub enum RawTlvError {
   #[error("buffer too short")]
@@ -203,8 +179,6 @@ pub enum TlvDecodeError {
   UnknownChassisIdSubtype(u8),
   #[error("unknown port id subtype '{0}'")]
   UnknownPortIdSubtype(u8),
-  #[error(transparent)]
-  FromStringError(#[from] std::string::FromUtf8Error),
   #[error("unknown tlv '{0}'")]
   UnknownTlv(u8),
 }
@@ -233,41 +207,9 @@ impl<'a> Tlv<'a> {
       TlvKind::PortDescription => Ok(Tlv::PortDescription(String::from_utf8_lossy(raw.payload))),
       TlvKind::SystemName => Ok(Tlv::SystemName(String::from_utf8_lossy(raw.payload))),
       TlvKind::SystemDescription => Ok(Tlv::SystemDescription(String::from_utf8_lossy(raw.payload))),
-
       TlvKind::Capabilities => Capabilities::decode(raw.payload).map(Tlv::Capabilities),
-
       TlvKind::ManagementAddress => ManagementAddress::decode(raw.payload).map(Tlv::ManagementAddress),
-
-      TlvKind::Org => {
-        if raw.payload.len() < 3 {
-          return Err(TlvDecodeError::BufferTooShort);
-        }
-
-        match raw.payload[0..3].try_into().unwrap() {
-          LLDP_TLV_ORG_DOT1 => {
-            if raw.payload.len() < 4 {
-              return Err(TlvDecodeError::BufferTooShort);
-            }
-
-            match raw.payload[3] {
-              LLDP_TLV_DOT1_PVID => match raw.payload.len().cmp(&6) {
-                Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
-                Ordering::Less => Err(TlvDecodeError::BufferTooShort),
-                Ordering::Equal => Ok(Tlv::Org(OrgTlv::Ieee802Dot1(Ieee802Dot1Tlv::PortVlanId(
-                  u16::from_be_bytes(raw.payload[4..6].try_into().unwrap()),
-                )))),
-              },
-
-              _ => Err(TlvDecodeError::UnknownTlv(255)),
-            }
-          }
-
-          // LLDP_TLV_ORG_DOT3 => {
-          //   todo!("dot3")
-          // }
-          _ => Err(TlvDecodeError::UnknownTlv(255)),
-        }
-      }
+      TlvKind::Org => OrgTlv::decode(raw.payload).map(Tlv::Org),
     }
   }
 }
