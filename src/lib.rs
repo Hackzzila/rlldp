@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display};
 
 pub mod lldp;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct MacAddress(pub [u8; 6]);
 

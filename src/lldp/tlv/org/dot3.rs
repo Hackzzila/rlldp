@@ -38,14 +38,16 @@ impl From<TlvKind> for u8 {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Tlv {
   MacPhyStatus(MacPhyStatus),
 }
 
 impl Tlv {
   pub fn kind(&self) -> TlvKind {
-    todo!()
+    match self {
+      Self::MacPhyStatus(_) => TlvKind::MacPhyStatus,
+    }
   }
 
   pub(super) fn decode(subtype: u8, buf: &[u8]) -> Result<Self, TlvDecodeError> {
@@ -71,9 +73,39 @@ impl Tlv {
       x => Err(TlvDecodeError::UnknownTlv(x.into())),
     }
   }
+
+  pub(super) fn encoded_size(&self) -> usize {
+    let size = match self {
+      Self::MacPhyStatus(_) => 5,
+    };
+    size + 1
+  }
+
+  pub(super) fn encode(&self, buf: &mut Vec<u8>) {
+    buf.push(self.kind().into());
+    match self {
+      Self::MacPhyStatus(x) => {
+        buf.push(x.status.bits());
+        buf.extend(x.advertised.bits().to_be_bytes());
+        let mau: u16 = x.mau.into();
+        buf.extend(mau.to_be_bytes());
+      }
+    }
+  }
 }
 
-#[derive(Debug, Clone)]
+#[test]
+fn test_encode_decode() {
+  use crate::lldp::tlv::{org::OrgTlv, test_encode_decode, Tlv as BaseTlv};
+
+  test_encode_decode(BaseTlv::Org(OrgTlv::Dot3(Tlv::MacPhyStatus(MacPhyStatus {
+    status: AutoNegotiationStatus::ENABLED,
+    advertised: AutoNegotiationCapability::OTHER | AutoNegotiationCapability::B_1000_BASE_T_FD,
+    mau: MauType::B1000BaseTFD,
+  }))));
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MacPhyStatus {
   pub status: AutoNegotiationStatus,
   pub advertised: AutoNegotiationCapability,

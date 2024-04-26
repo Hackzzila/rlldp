@@ -45,7 +45,7 @@ impl From<PortIdKind> for u8 {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PortId<'a> {
   InterfaceAlias(Cow<'a, str>),
   PortComponent(Cow<'a, str>),
@@ -96,7 +96,7 @@ impl<'a> PortId<'a> {
 
       PortIdKind::AgentCid => Ok(PortId::AgentCircuitId(Cow::Borrowed(buf))),
 
-      PortIdKind::Addr => Ok(PortId::NetworkAddress(NetworkAddress::parse(buf)?)),
+      PortIdKind::Addr => Ok(PortId::NetworkAddress(NetworkAddress::decode(buf)?)),
 
       PortIdKind::LlAddr => match buf.len().cmp(&6) {
         Ordering::Less => Err(TlvDecodeError::BufferTooShort),
@@ -108,4 +108,57 @@ impl<'a> PortId<'a> {
       },
     }
   }
+
+  pub(super) fn encoded_size(&self) -> usize {
+    let size = match self {
+      Self::InterfaceAlias(x) | Self::PortComponent(x) | Self::InterfaceName(x) | Self::Local(x) => x.len(),
+
+      Self::MacAddress(_) => 6,
+      Self::NetworkAddress(x) => x.encoded_size(),
+      Self::AgentCircuitId(x) => x.len(),
+    };
+    size + 1
+  }
+
+  pub(super) fn encode(&self, buf: &mut Vec<u8>) {
+    buf.push(self.kind().into());
+
+    match self {
+      Self::InterfaceAlias(x) | Self::PortComponent(x) | Self::InterfaceName(x) | Self::Local(x) => {
+        buf.extend(x.as_bytes())
+      }
+
+      Self::MacAddress(mac) => buf.extend(mac.0),
+      Self::NetworkAddress(x) => x.encode(buf),
+      Self::AgentCircuitId(x) => buf.extend(x.iter()),
+    }
+  }
+}
+
+#[test]
+fn basic_encode_decode() {
+  use super::Tlv;
+  use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+  let cow = Cow::Borrowed("foobarbaz");
+
+  super::test_encode_decode(Tlv::PortId(PortId::InterfaceAlias(cow.clone())));
+  super::test_encode_decode(Tlv::PortId(PortId::InterfaceName(cow.clone())));
+  super::test_encode_decode(Tlv::PortId(PortId::PortComponent(cow.clone())));
+  super::test_encode_decode(Tlv::PortId(PortId::Local(cow.clone())));
+  super::test_encode_decode(Tlv::PortId(PortId::MacAddress(MacAddress([12, 34, 56, 78, 90, 12]))));
+  super::test_encode_decode(Tlv::PortId(PortId::AgentCircuitId(vec![1, 2, 3, 4].into())));
+
+  super::test_encode_decode(Tlv::PortId(PortId::NetworkAddress(NetworkAddress::Ip(IpAddr::V4(
+    Ipv4Addr::new(1, 2, 3, 4),
+  )))));
+
+  super::test_encode_decode(Tlv::PortId(PortId::NetworkAddress(NetworkAddress::Ip(IpAddr::V6(
+    Ipv6Addr::new(1, 2, 3, 4, 5, 6, 7, 8),
+  )))));
+
+  super::test_encode_decode(Tlv::PortId(PortId::NetworkAddress(NetworkAddress::Other(
+    44,
+    vec![11, 22, 33, 44, 55].into(),
+  ))));
 }

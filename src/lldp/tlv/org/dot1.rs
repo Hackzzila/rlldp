@@ -34,7 +34,7 @@ impl From<TlvKind> for u8 {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Tlv<'a> {
   PortVlanId(u16),
   VlanName(u16, Cow<'a, str>),
@@ -83,4 +83,32 @@ impl<'a> Tlv<'a> {
       x => Err(TlvDecodeError::UnknownTlv(x.into())),
     }
   }
+
+  pub(super) fn encoded_size(&self) -> usize {
+    let size = match self {
+      Self::PortVlanId(_) => 2,
+      Self::VlanName(_, x) => 3 + x.len(),
+    };
+    size + 1
+  }
+
+  pub(super) fn encode(&self, buf: &mut Vec<u8>) {
+    buf.push(self.kind().into());
+    match self {
+      Self::PortVlanId(x) => buf.extend(x.to_be_bytes()),
+      Self::VlanName(id, name) => {
+        buf.extend(id.to_be_bytes());
+        buf.push(name.len() as _);
+        buf.extend(name.as_bytes());
+      }
+    }
+  }
+}
+
+#[test]
+fn test_encode_decode() {
+  use crate::lldp::tlv::{org::OrgTlv, test_encode_decode, Tlv as BaseTlv};
+
+  test_encode_decode(BaseTlv::Org(OrgTlv::Dot1(Tlv::PortVlanId(1234))));
+  test_encode_decode(BaseTlv::Org(OrgTlv::Dot1(Tlv::VlanName(1234, "foobarbaz".into()))));
 }

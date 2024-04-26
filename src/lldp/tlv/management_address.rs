@@ -33,7 +33,7 @@ impl From<ManagementInterfaceKind> for u8 {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ManagementAddress<'a> {
   pub address: NetworkAddress<'a>,
   pub interface_subtype: ManagementInterfaceKind,
@@ -62,7 +62,7 @@ impl<'a> ManagementAddress<'a> {
       return Err(TlvDecodeError::BufferTooShort);
     }
 
-    let address = NetworkAddress::parse(&buf[1..1 + addr_str_length])?;
+    let address = NetworkAddress::decode(&buf[1..1 + addr_str_length])?;
 
     let buf = &buf[1 + addr_str_length..];
 
@@ -90,4 +90,30 @@ impl<'a> ManagementAddress<'a> {
       }),
     }
   }
+
+  pub(super) fn encoded_size(&self) -> usize {
+    self.address.encoded_size() + self.oid.len() + 7
+  }
+
+  pub(super) fn encode(&self, buf: &mut Vec<u8>) {
+    buf.push(self.address.encoded_size() as _);
+    self.address.encode(buf);
+    buf.push(self.interface_subtype.into());
+    buf.extend(self.interface_number.to_be_bytes());
+    buf.push(self.oid.len() as _);
+    buf.extend(self.oid.as_bytes());
+  }
+}
+
+#[test]
+fn basic_encode_decode() {
+  use super::Tlv;
+  use std::net::{IpAddr, Ipv4Addr};
+
+  super::test_encode_decode(Tlv::ManagementAddress(ManagementAddress {
+    address: NetworkAddress::Ip(IpAddr::V4(Ipv4Addr::new(1, 2, 4, 4))),
+    interface_subtype: ManagementInterfaceKind::IfIndex,
+    interface_number: 1234,
+    oid: Cow::Borrowed("foobarbaz"),
+  }));
 }

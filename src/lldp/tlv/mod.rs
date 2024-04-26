@@ -86,7 +86,7 @@ pub fn decode_list(mut buf: &[u8]) -> Result<Vec<Tlv>, RawTlvError> {
   Ok(out)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RawTlv<'a> {
   pub ty: u8,
   pub payload: &'a [u8],
@@ -119,7 +119,7 @@ impl<'a> RawTlv<'a> {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Tlv<'a> {
   End,
   ChassisId(ChassisId<'a>),
@@ -218,4 +218,67 @@ impl<'a> Tlv<'a> {
       TlvKind::Org => OrgTlv::decode(raw.payload).map(Tlv::Org),
     }
   }
+
+  pub fn encoded_size(&self) -> usize {
+    match self {
+      Self::ChassisId(x) => x.encoded_size(),
+      Self::PortId(x) => x.encoded_size(),
+      Self::TimeToLive(_) => 2,
+      Self::PortDescription(x) | Self::SystemName(x) | Self::SystemDescription(x) => x.len(),
+      Self::Capabilities(x) => x.encoded_size(),
+      Self::ManagementAddress(x) => x.encoded_size(),
+      Self::Org(x) => x.encoded_size(),
+      Self::End => 0,
+    }
+  }
+
+  pub fn encode(&self, buf: &mut Vec<u8>) {
+    let ty: u8 = self.kind().into();
+    let len = self.encoded_size();
+    buf.reserve(len + 2);
+
+    let ty = (ty as u16) << 9;
+    let len = (len as u16) & 0b00000001_11111111;
+    let hdr = ty + len;
+    buf.extend(hdr.to_be_bytes());
+
+    match self {
+      Self::ChassisId(x) => x.encode(buf),
+      Self::PortId(x) => x.encode(buf),
+      Self::TimeToLive(x) => buf.extend(x.to_be_bytes()),
+      Self::PortDescription(x) | Self::SystemName(x) | Self::SystemDescription(x) => buf.extend(x.as_bytes()),
+      Self::Capabilities(x) => x.encode(buf),
+      Self::ManagementAddress(x) => x.encode(buf),
+      Self::Org(x) => x.encode(buf),
+      Self::End => {}
+    }
+  }
+}
+
+#[cfg(test)]
+fn test_encode_decode(tlv: Tlv) {
+  let mut buf = Vec::new();
+  tlv.encode(&mut buf);
+
+  let raw_tlv = RawTlv::decode(&buf).unwrap();
+  let parsed_tlv = Tlv::decode(raw_tlv).unwrap();
+  assert_eq!(parsed_tlv, tlv);
+}
+
+#[test]
+fn encode_decode_ttl() {
+  test_encode_decode(Tlv::TimeToLive(1234));
+}
+
+#[test]
+fn encode_decode_string_tlv() {
+  let cow = Cow::Borrowed("foobarbaz");
+  test_encode_decode(Tlv::PortDescription(cow.clone()));
+  test_encode_decode(Tlv::SystemName(cow.clone()));
+  test_encode_decode(Tlv::SystemDescription(cow.clone()));
+}
+
+#[test]
+fn encode_decode_end_tlv() {
+  test_encode_decode(Tlv::End);
 }

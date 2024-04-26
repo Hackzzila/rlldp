@@ -4,7 +4,7 @@ use bitflags::bitflags;
 
 use super::TlvDecodeError;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Capabilities {
   pub capabilities: CapabilityFlags,
   pub enabled_capabilities: CapabilityFlags,
@@ -45,4 +45,25 @@ impl Capabilities {
       }
     }
   }
+
+  pub(super) fn encoded_size(&self) -> usize {
+    4
+  }
+
+  pub(super) fn encode(&self, buf: &mut Vec<u8>) {
+    buf.extend(self.capabilities.bits().to_be_bytes());
+    buf.extend(self.enabled_capabilities.bits().to_be_bytes());
+  }
+}
+
+#[test]
+fn basic_encode_decode() {
+  use super::Tlv;
+
+  let capabilities = CapabilityFlags::OTHER | CapabilityFlags::TWO_PORT_MAC_RELAY;
+  let enabled_capabilities = CapabilityFlags::REPEATER | CapabilityFlags::S_VLAN;
+  super::test_encode_decode(Tlv::Capabilities(Capabilities {
+    capabilities,
+    enabled_capabilities,
+  }))
 }

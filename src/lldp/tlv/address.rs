@@ -33,7 +33,7 @@ impl From<NetworkAddressKind> for u8 {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum NetworkAddress<'a> {
   Ip(IpAddr),
   Other(u8, Cow<'a, [u8]>),
@@ -55,7 +55,7 @@ impl<'a> NetworkAddress<'a> {
     }
   }
 
-  pub(super) fn parse(buf: &'a [u8]) -> Result<Self, TlvDecodeError> {
+  pub(super) fn decode(buf: &'a [u8]) -> Result<Self, TlvDecodeError> {
     if buf.is_empty() {
       return Err(TlvDecodeError::BufferTooShort);
     }
@@ -82,6 +82,24 @@ impl<'a> NetworkAddress<'a> {
       },
 
       NetworkAddressKind::Unknown(x) => Ok(NetworkAddress::Other(x, Cow::Borrowed(buf))),
+    }
+  }
+
+  pub(super) fn encoded_size(&self) -> usize {
+    let min_size = 1;
+    match self {
+      Self::Ip(IpAddr::V4(_)) => min_size + 4,
+      Self::Ip(IpAddr::V6(_)) => min_size + 16,
+      Self::Other(_, x) => min_size + x.len(),
+    }
+  }
+
+  pub(super) fn encode(&self, buf: &mut Vec<u8>) {
+    buf.push(self.kind().into());
+    match self {
+      Self::Ip(IpAddr::V4(x)) => buf.extend(x.octets()),
+      Self::Ip(IpAddr::V6(x)) => buf.extend(x.octets()),
+      Self::Other(_, x) => buf.extend(x.iter()),
     }
   }
 }

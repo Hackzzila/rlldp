@@ -45,7 +45,7 @@ impl From<ChassisIdKind> for u8 {
   }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChassisId<'a> {
   Chassis(Cow<'a, str>),
   InterfaceAlias(Cow<'a, str>),
@@ -95,7 +95,7 @@ impl<'a> ChassisId<'a> {
       ChassisIdKind::IfName => Ok(ChassisId::InterfaceName(String::from_utf8_lossy(buf))),
       ChassisIdKind::Local => Ok(ChassisId::Local(String::from_utf8_lossy(buf))),
 
-      ChassisIdKind::Addr => Ok(ChassisId::NetworkAddress(NetworkAddress::parse(buf)?)),
+      ChassisIdKind::Addr => Ok(ChassisId::NetworkAddress(NetworkAddress::decode(buf)?)),
 
       ChassisIdKind::LlAddr => match buf.len().cmp(&6) {
         Ordering::Less => Err(TlvDecodeError::BufferTooShort),
@@ -107,4 +107,59 @@ impl<'a> ChassisId<'a> {
       },
     }
   }
+
+  pub(super) fn encoded_size(&self) -> usize {
+    let size = match self {
+      Self::Chassis(x) | Self::InterfaceAlias(x) | Self::PortComponent(x) | Self::InterfaceName(x) | Self::Local(x) => {
+        x.len()
+      }
+
+      Self::MacAddress(_) => 6,
+      Self::NetworkAddress(x) => x.encoded_size(),
+    };
+    size + 1
+  }
+
+  pub(super) fn encode(&self, buf: &mut Vec<u8>) {
+    buf.push(self.kind().into());
+
+    match self {
+      Self::Chassis(x) | Self::InterfaceAlias(x) | Self::PortComponent(x) | Self::InterfaceName(x) | Self::Local(x) => {
+        buf.extend(x.as_bytes())
+      }
+
+      Self::MacAddress(mac) => buf.extend(mac.0),
+      Self::NetworkAddress(x) => x.encode(buf),
+    }
+  }
+}
+
+#[test]
+fn basic_encode_decode() {
+  use super::Tlv;
+  use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+  let cow = Cow::Borrowed("foobarbaz");
+
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::Chassis(cow.clone())));
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::InterfaceAlias(cow.clone())));
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::InterfaceName(cow.clone())));
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::PortComponent(cow.clone())));
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::Local(cow.clone())));
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::MacAddress(MacAddress([
+    12, 34, 56, 78, 90, 12,
+  ]))));
+
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::NetworkAddress(NetworkAddress::Ip(
+    IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),
+  ))));
+
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::NetworkAddress(NetworkAddress::Ip(
+    IpAddr::V6(Ipv6Addr::new(1, 2, 3, 4, 5, 6, 7, 8)),
+  ))));
+
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::NetworkAddress(NetworkAddress::Other(
+    44,
+    vec![11, 22, 33, 44, 55].into(),
+  ))));
 }
