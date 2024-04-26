@@ -3,7 +3,9 @@ use std::borrow::Cow;
 use thiserror::Error;
 use tracing::warn;
 
-use super::tlv::{decode_list, Capabilities, ChassisId, ManagementAddress, PortId, RawTlvError, Tlv};
+use super::tlv::{
+  decode_list, org::dot1, Capabilities, ChassisId, ManagementAddress, OrgTlv, PortId, RawTlvError, Tlv,
+};
 
 #[derive(Debug, Clone, Error)]
 pub enum DataUnitError {
@@ -27,19 +29,60 @@ pub struct DataUnit<'a> {
   pub system_description: Option<Cow<'a, str>>,
   pub capabilities: Option<Capabilities>,
   pub management_address: Vec<ManagementAddress<'a>>,
+  pub org: Org<'a>,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct DataUnitOrg {
-  pub ieee802_1: DataUnitIeee802Dot1,
+pub struct Org<'a> {
+  pub dot1: Dot1<'a>,
+}
+
+impl<'a> Org<'a> {
+  pub fn to_static(self) -> Org<'static> {
+    Org {
+      dot1: self.dot1.to_static(),
+    }
+  }
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct DataUnitIeee802Dot1 {
+pub struct Dot1<'a> {
   pub port_vlan_id: Option<u16>,
+  pub vlan_name: Vec<(u16, Cow<'a, str>)>,
+}
+
+impl<'a> Dot1<'a> {
+  pub fn to_static(self) -> Dot1<'static> {
+    Dot1 {
+      port_vlan_id: self.port_vlan_id,
+      vlan_name: self
+        .vlan_name
+        .into_iter()
+        .map(|(x, y)| (x, Cow::Owned(y.into_owned())))
+        .collect(),
+    }
+  }
 }
 
 impl<'a> DataUnit<'a> {
+  pub fn to_static(self) -> DataUnit<'static> {
+    DataUnit {
+      chassis_id: self.chassis_id.to_static(),
+      port_id: self.port_id.to_static(),
+      time_to_live: self.time_to_live,
+      port_description: self.port_description.map(|x| Cow::Owned(x.into_owned())),
+      system_name: self.system_name.map(|x| Cow::Owned(x.into_owned())),
+      system_description: self.system_description.map(|x| Cow::Owned(x.into_owned())),
+      capabilities: self.capabilities,
+      management_address: self
+        .management_address
+        .into_iter()
+        .map(ManagementAddress::to_static)
+        .collect(),
+      org: self.org.to_static(),
+    }
+  }
+
   pub fn decode(buf: &'a [u8]) -> Result<Self, DataUnitError> {
     let list = decode_list(buf)?;
 
@@ -51,7 +94,7 @@ impl<'a> DataUnit<'a> {
     let mut system_description = None;
     let mut capabilities = None;
     let mut management_address = Vec::new();
-    // let mut ieee802_1_port_vlan_id = None;
+    let mut org = Org::default();
 
     for tlv in list {
       match tlv {
@@ -108,14 +151,15 @@ impl<'a> DataUnit<'a> {
 
         Tlv::ManagementAddress(x) => management_address.push(x),
 
-        // Tlv::Org(OrgTlv::Ieee802Dot1(Ieee802Dot1Tlv::PortVlanId(new))) => {
-        //   if let Some(old) = ieee802_1_port_vlan_id.take() {
-        //     ieee802_1_port_vlan_id =
-        //       Some(cx.handle_duplicate_tlv(old, Tlv::Org(OrgTlv::Ieee802Dot1(Ieee802Dot1Tlv::PortVlanId(new))))?);
-        //   } else {
-        //     ieee802_1_port_vlan_id = Some(Tlv::Org(OrgTlv::Ieee802Dot1(Ieee802Dot1Tlv::PortVlanId(new))));
-        //   }
-        // }
+        Tlv::Org(OrgTlv::Dot1(dot1::Tlv::PortVlanId(new))) => {
+          if let Some(old) = org.dot1.port_vlan_id.take() {
+            warn!(?old, ?new, "duplicate vlan id");
+          }
+          org.dot1.port_vlan_id = Some(new);
+        }
+
+        Tlv::Org(OrgTlv::Dot1(dot1::Tlv::VlanName(x, y))) => org.dot1.vlan_name.push((x, y)),
+
         _ => {}
       }
     }
@@ -129,6 +173,7 @@ impl<'a> DataUnit<'a> {
       system_description,
       capabilities,
       management_address,
+      org,
     })
   }
 }
