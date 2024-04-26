@@ -1,13 +1,9 @@
+use std::borrow::Cow;
+
 use thiserror::Error;
+use tracing::warn;
 
-use crate::lldp::tlv::{
-  TlvList, LLDP_TLV_CHASSIS_ID, LLDP_TLV_PORT_DESCR, LLDP_TLV_PORT_ID, LLDP_TLV_SYSTEM_DESCR, LLDP_TLV_SYSTEM_NAME,
-  LLDP_TLV_TTL,
-};
-
-use super::tlv::{
-  Capabilities, ChassisId, ManagementAddress, PortId, RawTlvError, Tlv, TlvDecodeError, LLDP_TLV_SYSTEM_CAP,
-};
+use super::tlv::{decode_list, Capabilities, ChassisId, ManagementAddress, PortId, RawTlvError, Tlv};
 
 #[derive(Debug, Clone, Error)]
 pub enum DataUnitError {
@@ -17,29 +13,36 @@ pub enum DataUnitError {
   MissingPortId,
   #[error("missing time to live")]
   MissingTimeToLive,
-  #[error("duplicate TLV")]
-  DuplicateTlv(u8),
+  #[error("failed to decode tlv: '{0}'")]
+  RawTlvError(#[from] RawTlvError),
 }
 
 #[derive(Debug, Clone)]
-pub struct DataUnit {
+pub struct DataUnit<'a> {
   pub chassis_id: ChassisId,
   pub port_id: PortId,
   pub time_to_live: u16,
-  pub port_description: Option<String>,
-  pub system_name: Option<String>,
-  pub system_description: Option<String>,
+  pub port_description: Option<Cow<'a, str>>,
+  pub system_name: Option<Cow<'a, str>>,
+  pub system_description: Option<Cow<'a, str>>,
   pub capabilities: Option<Capabilities>,
   pub management_address: Vec<ManagementAddress>,
 }
 
-impl DataUnit {
-  pub fn decode(buf: &[u8]) -> (Result<Self, DataUnitError>, Vec<TlvDecodeError>, Option<RawTlvError>) {
-    let list = TlvList::decode(buf);
-    (Self::decode_inner(list.tlvs), list.errors, list.critical_error)
-  }
+#[derive(Debug, Clone, Default)]
+pub struct DataUnitOrg {
+  pub ieee802_1: DataUnitIeee802Dot1,
+}
 
-  fn decode_inner(tlvs: Vec<Tlv>) -> Result<Self, DataUnitError> {
+#[derive(Debug, Clone, Default)]
+pub struct DataUnitIeee802Dot1 {
+  pub port_vlan_id: Option<u16>,
+}
+
+impl<'a> DataUnit<'a> {
+  pub fn decode(buf: &'a [u8]) -> Result<Self, DataUnitError> {
+    let list = decode_list(buf)?;
+
     let mut chassis_id = None;
     let mut port_id = None;
     let mut time_to_live = None;
@@ -48,54 +51,72 @@ impl DataUnit {
     let mut system_description = None;
     let mut capabilities = None;
     let mut management_address = Vec::new();
+    // let mut ieee802_1_port_vlan_id = None;
 
-    for tlv in tlvs {
+    for tlv in list {
       match tlv {
         Tlv::End => {}
 
-        Tlv::ChassisId(x) => {
-          if chassis_id.replace(x).is_some() {
-            return Err(DataUnitError::DuplicateTlv(LLDP_TLV_CHASSIS_ID));
+        Tlv::ChassisId(new) => {
+          if let Some(old) = chassis_id.take() {
+            warn!(?old, ?new, "duplicate chassis id");
           }
+          chassis_id = Some(new);
         }
 
-        Tlv::PortId(x) => {
-          if port_id.replace(x).is_some() {
-            return Err(DataUnitError::DuplicateTlv(LLDP_TLV_PORT_ID));
+        Tlv::PortId(new) => {
+          if let Some(old) = port_id.take() {
+            warn!(?old, ?new, "duplicate port id");
           }
+          port_id = Some(new);
         }
 
-        Tlv::TimeToLive(x) => {
-          if time_to_live.replace(x).is_some() {
-            return Err(DataUnitError::DuplicateTlv(LLDP_TLV_TTL));
+        Tlv::TimeToLive(new) => {
+          if let Some(old) = time_to_live.take() {
+            warn!(?old, ?new, "duplicate time to live");
           }
+          time_to_live = Some(new);
         }
 
-        Tlv::PortDescription(x) => {
-          if port_description.replace(x).is_some() {
-            return Err(DataUnitError::DuplicateTlv(LLDP_TLV_PORT_DESCR));
+        Tlv::PortDescription(new) => {
+          if let Some(old) = port_description.take() {
+            warn!(?old, ?new, "duplicate port description");
           }
+          port_description = Some(new);
         }
 
-        Tlv::SystemName(x) => {
-          if system_name.replace(x).is_some() {
-            return Err(DataUnitError::DuplicateTlv(LLDP_TLV_SYSTEM_NAME));
+        Tlv::SystemName(new) => {
+          if let Some(old) = system_name.take() {
+            warn!(?old, ?new, "duplicate system name");
           }
+          system_name = Some(new);
         }
 
-        Tlv::SystemDescription(x) => {
-          if system_description.replace(x).is_some() {
-            return Err(DataUnitError::DuplicateTlv(LLDP_TLV_SYSTEM_DESCR));
+        Tlv::SystemDescription(new) => {
+          if let Some(old) = system_description.take() {
+            warn!(?old, ?new, "duplicate system description");
           }
+          system_description = Some(new);
         }
 
-        Tlv::Capabilities(x) => {
-          if capabilities.replace(x).is_some() {
-            return Err(DataUnitError::DuplicateTlv(LLDP_TLV_SYSTEM_CAP));
+        Tlv::Capabilities(new) => {
+          if let Some(old) = capabilities.take() {
+            warn!(?old, ?new, "duplicate system capabilities");
           }
+          capabilities = Some(new);
         }
 
         Tlv::ManagementAddress(x) => management_address.push(x),
+
+        // Tlv::Org(OrgTlv::Ieee802Dot1(Ieee802Dot1Tlv::PortVlanId(new))) => {
+        //   if let Some(old) = ieee802_1_port_vlan_id.take() {
+        //     ieee802_1_port_vlan_id =
+        //       Some(cx.handle_duplicate_tlv(old, Tlv::Org(OrgTlv::Ieee802Dot1(Ieee802Dot1Tlv::PortVlanId(new))))?);
+        //   } else {
+        //     ieee802_1_port_vlan_id = Some(Tlv::Org(OrgTlv::Ieee802Dot1(Ieee802Dot1Tlv::PortVlanId(new))));
+        //   }
+        // }
+        _ => {}
       }
     }
 
