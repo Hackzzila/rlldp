@@ -14,14 +14,17 @@ bitflags! {
   #[repr(transparent)]
   #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
   pub struct CapabilityFlags: u16 {
-    const OTHER             = 0b00000001;
-    const REPEATER          = 0b00000010;
-    const BRIDGE            = 0b00000100;
-    const WLAN_ACCESS_POINT = 0b00001000;
-    const ROUTER            = 0b00010000;
-    const TELEPHONE         = 0b00100000;
-    const DOCSIS            = 0b01000000;
-    const STATION           = 0b10000000;
+    const OTHER              = 0b00000001;
+    const REPEATER           = 0b00000010;
+    const BRIDGE             = 0b00000100;
+    const WLAN_ACCESS_POINT  = 0b00001000;
+    const ROUTER             = 0b00010000;
+    const TELEPHONE          = 0b00100000;
+    const DOCSIS             = 0b01000000;
+    const STATION            = 0b10000000;
+    const C_VLAN             = 0b00000001_00000000;
+    const S_VLAN             = 0b00000010_00000000;
+    const TWO_PORT_MAC_RELAY = 0b00000100_00000000;
   }
 }
 
