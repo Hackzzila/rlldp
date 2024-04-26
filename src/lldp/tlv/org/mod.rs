@@ -10,7 +10,7 @@ pub const LLDP_TLV_ORG_DOT3: [u8; 3] = [0x00, 0x12, 0x0f];
 
 #[derive(Debug, Clone)]
 pub enum OrgTlv<'a> {
-  Dot1(dot1::Tlv),
+  Dot1(dot1::Tlv<'a>),
   Dot3(dot3::Tlv),
   Custom(CustomOrgTlv<'a>),
 }
@@ -18,7 +18,7 @@ pub enum OrgTlv<'a> {
 impl<'a> OrgTlv<'a> {
   pub fn to_static(self) -> OrgTlv<'static> {
     match self {
-      Self::Dot1(x) => OrgTlv::Dot1(x),
+      Self::Dot1(x) => OrgTlv::Dot1(x.to_static()),
       Self::Dot3(x) => OrgTlv::Dot3(x),
       Self::Custom(x) => OrgTlv::Custom(x.to_static()),
     }
