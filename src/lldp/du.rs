@@ -21,7 +21,7 @@ pub enum DataUnitError {
   RawTlvError(#[from] RawTlvError),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataUnit<'a> {
   pub chassis_id: ChassisId<'a>,
   pub port_id: PortId<'a>,
@@ -34,7 +34,7 @@ pub struct DataUnit<'a> {
   pub org: Org<'a>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Org<'a> {
   pub dot1: Dot1<'a>,
   pub dot3: Dot3,
@@ -49,7 +49,7 @@ impl<'a> Org<'a> {
   }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Dot1<'a> {
   pub port_vlan_id: Option<u16>,
   pub vlan_name: Vec<(u16, Cow<'a, str>)>,
@@ -68,7 +68,7 @@ impl<'a> Dot1<'a> {
   }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Dot3 {
   pub mac_phy_status: Option<dot3::MacPhyStatus>,
 }
@@ -192,4 +192,147 @@ impl<'a> DataUnit<'a> {
       org,
     })
   }
+
+  pub fn encode(self, buf: &mut Vec<u8>) {
+    let chassis_id = Tlv::ChassisId(self.chassis_id);
+    let port_id = Tlv::PortId(self.port_id);
+    let ttl = Tlv::TimeToLive(self.time_to_live);
+    let port_description = self.port_description.map(Tlv::PortDescription);
+    let system_name = self.system_name.map(Tlv::SystemName);
+    let system_description = self.system_description.map(Tlv::SystemDescription);
+    let capabilities = self.capabilities.map(Tlv::Capabilities);
+    let management_address: Vec<_> = self
+      .management_address
+      .into_iter()
+      .map(Tlv::ManagementAddress)
+      .collect();
+
+    let org_dot1_vlan_id = self
+      .org
+      .dot1
+      .port_vlan_id
+      .map(|x| Tlv::Org(OrgTlv::Dot1(dot1::Tlv::PortVlanId(x))));
+
+    let org_dot1_vlan_name: Vec<_> = self
+      .org
+      .dot1
+      .vlan_name
+      .into_iter()
+      .map(|(x, y)| Tlv::Org(OrgTlv::Dot1(dot1::Tlv::VlanName(x, y))))
+      .collect();
+
+    let org_dot3_phy = self
+      .org
+      .dot3
+      .mac_phy_status
+      .map(|x| Tlv::Org(OrgTlv::Dot3(dot3::Tlv::MacPhyStatus(x))));
+
+    let total_size = chassis_id.encoded_size()
+      + port_id.encoded_size()
+      + ttl.encoded_size()
+      + port_description.as_ref().map(|x| x.encoded_size()).unwrap_or_default()
+      + system_description
+        .as_ref()
+        .map(|x| x.encoded_size())
+        .unwrap_or_default()
+      + system_name.as_ref().map(|x| x.encoded_size()).unwrap_or_default()
+      + capabilities.as_ref().map(|x| x.encoded_size()).unwrap_or_default()
+      + management_address.iter().fold(0, |acc, x| acc + x.encoded_size())
+      + org_dot1_vlan_id.as_ref().map(|x| x.encoded_size()).unwrap_or_default()
+      + org_dot1_vlan_name.iter().fold(0, |acc, x| acc + x.encoded_size())
+      + org_dot3_phy.as_ref().map(|x| x.encoded_size()).unwrap_or_default();
+
+    buf.reserve(total_size);
+
+    chassis_id.encode(buf);
+    port_id.encode(buf);
+    ttl.encode(buf);
+
+    if let Some(x) = port_description {
+      x.encode(buf);
+    }
+
+    if let Some(x) = system_name {
+      x.encode(buf);
+    }
+
+    if let Some(x) = system_description {
+      x.encode(buf);
+    }
+
+    if let Some(x) = capabilities {
+      x.encode(buf);
+    }
+
+    for x in management_address.into_iter() {
+      x.encode(buf);
+    }
+
+    if let Some(x) = org_dot1_vlan_id {
+      x.encode(buf);
+    }
+
+    for x in org_dot1_vlan_name {
+      x.encode(buf);
+    }
+
+    if let Some(x) = org_dot3_phy {
+      x.encode(buf);
+    }
+  }
+}
+
+#[cfg(test)]
+fn test_encode_decode(du: DataUnit) {
+  let mut buf = Vec::new();
+  du.clone().encode(&mut buf);
+
+  let parsed_du = DataUnit::decode(&buf).unwrap();
+  assert_eq!(parsed_du, du);
+}
+
+#[test]
+fn basic_encode_decode() {
+  use crate::lldp::tlv::{
+    org::dot3::{AutoNegotiationCapability, AutoNegotiationStatus, MacPhyStatus, MauType},
+    ManagementInterfaceKind, NetworkAddress,
+  };
+  use std::net::{IpAddr, Ipv4Addr};
+
+  test_encode_decode(DataUnit {
+    chassis_id: ChassisId::Local("chassis".into()),
+    port_id: PortId::Local("port".into()),
+    time_to_live: 1234,
+    port_description: Some("port_description".into()),
+    system_name: Some("system_name".into()),
+    system_description: Some("system_description".into()),
+    capabilities: None,
+    management_address: vec![
+      ManagementAddress {
+        address: NetworkAddress::Ip(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
+        interface_subtype: ManagementInterfaceKind::IfIndex,
+        interface_number: 123456,
+        oid: "oid".into(),
+      },
+      ManagementAddress {
+        address: NetworkAddress::Ip(IpAddr::V4(Ipv4Addr::new(5, 6, 7, 8))),
+        interface_subtype: ManagementInterfaceKind::SysPort,
+        interface_number: 567890,
+        oid: "".into(),
+      },
+    ],
+    org: Org {
+      dot1: Dot1 {
+        port_vlan_id: Some(1234),
+        vlan_name: vec![(1234, "vlan1".into()), (5678, "vlan2".into())],
+      },
+      dot3: Dot3 {
+        mac_phy_status: Some(MacPhyStatus {
+          status: AutoNegotiationStatus::ENABLED,
+          advertised: AutoNegotiationCapability::OTHER | AutoNegotiationCapability::B_1000_BASE_T_FD,
+          mau: MauType::B1000BaseTFD,
+        }),
+      },
+    },
+  })
 }
