@@ -1,8 +1,15 @@
 use std::borrow::Cow;
 
-use crate::cdp::DataUnit as CdpDu;
-use crate::lldp::du::DataUnit as LLdpDu;
-use crate::lldp::tlv::PortId;
+use crate::{
+  cdp::DataUnit as CdpDu,
+  lldp::{du::DataUnit as LLdpDu, tlv::PortId},
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Protocol {
+  Cdp,
+  Lldp,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DataUnit<'a> {
@@ -11,6 +18,20 @@ pub enum DataUnit<'a> {
 }
 
 impl<'a> DataUnit<'a> {
+  pub fn protocol(&self) -> Protocol {
+    match self {
+      Self::Cdp(_) => Protocol::Cdp,
+      Self::Lldp(_) => Protocol::Lldp,
+    }
+  }
+
+  pub fn to_static(self) -> DataUnit<'static> {
+    match self {
+      Self::Cdp(x) => DataUnit::Cdp(x.to_static()),
+      Self::Lldp(x) => DataUnit::Lldp(x.to_static()),
+    }
+  }
+
   pub fn time_to_live(&self) -> u16 {
     match self {
       Self::Cdp(x) => x.time_to_live as _,
