@@ -3,8 +3,9 @@ use std::{
   fmt::{self, Debug},
 };
 
-use crate::lldp::tlv::TlvDecodeError;
 use bitflags::bitflags;
+
+use crate::lldp::tlv::TlvDecodeError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TlvKind {
@@ -59,7 +60,7 @@ impl Tlv {
         Ordering::Equal => {
           let status = AutoNegotiationStatus::from_bits_retain(buf[0]);
           let advertised =
-            AutoNegotiationCapability::from_bits_retain(u16::from_be_bytes(buf[1..3].try_into().unwrap()));
+            AutoNegotiationCapability::from_bits_retain(u16::from_le_bytes(buf[1..3].try_into().unwrap()));
           let mau = MauType::from(u16::from_be_bytes(buf[3..5].try_into().unwrap()));
 
           Ok(Tlv::MacPhyStatus(MacPhyStatus {
@@ -86,7 +87,7 @@ impl Tlv {
     match self {
       Self::MacPhyStatus(x) => {
         buf.push(x.status.bits());
-        buf.extend(x.advertised.bits().to_be_bytes());
+        buf.extend(x.advertised.bits().to_le_bytes());
         let mau: u16 = x.mau.into();
         buf.extend(mau.to_be_bytes());
       }
