@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display};
 
+pub mod cdp;
 pub mod lldp;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
