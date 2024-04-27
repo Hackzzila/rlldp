@@ -3,9 +3,8 @@ use std::borrow::Cow;
 use thiserror::Error;
 use tracing::warn;
 
-use crate::cdp::tlv::{RawTlv, Tlv};
-
 use self::tlv::{Duplex, RawTlvError};
+use crate::cdp::tlv::{RawTlv, Tlv};
 
 pub mod tlv;
 
@@ -31,6 +30,18 @@ pub struct DataUnit<'a> {
 }
 
 impl<'a> DataUnit<'a> {
+  pub fn to_static(self) -> DataUnit<'static> {
+    DataUnit {
+      time_to_live: self.time_to_live,
+      device_id: self.device_id.map(|x| Cow::Owned(x.into_owned())),
+      software_version: self.software_version.map(|x| Cow::Owned(x.into_owned())),
+      platform: self.platform.map(|x| Cow::Owned(x.into_owned())),
+      port_id: self.port_id.map(|x| Cow::Owned(x.into_owned())),
+      duplex: self.duplex,
+      native_vlan: self.native_vlan,
+    }
+  }
+
   pub fn decode(buf: &'a [u8]) -> Result<Self, DataUnitError> {
     if buf.len() < 4 {
       return Err(DataUnitError::BufferTooShort);
