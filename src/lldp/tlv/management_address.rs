@@ -1,8 +1,7 @@
 use std::{borrow::Cow, cmp::Ordering};
 
-use crate::lldp::tlv::NetworkAddress;
-
 use super::TlvDecodeError;
+use crate::lldp::tlv::NetworkAddress;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ManagementInterfaceKind {
@@ -107,8 +106,9 @@ impl<'a> ManagementAddress<'a> {
 
 #[test]
 fn basic_encode_decode() {
-  use super::Tlv;
   use std::net::{IpAddr, Ipv4Addr};
+
+  use super::Tlv;
 
   super::test_encode_decode(Tlv::ManagementAddress(ManagementAddress {
     address: NetworkAddress::Ip(IpAddr::V4(Ipv4Addr::new(1, 2, 4, 4))),

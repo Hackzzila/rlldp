@@ -1,8 +1,7 @@
 use std::{borrow::Cow, cmp::Ordering};
 
-use crate::MacAddress;
-
 use super::{NetworkAddress, TlvDecodeError};
+use crate::MacAddress;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PortIdKind {
@@ -137,8 +136,9 @@ impl<'a> PortId<'a> {
 
 #[test]
 fn basic_encode_decode() {
-  use super::Tlv;
   use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+  use super::Tlv;
 
   let cow = Cow::Borrowed("foobarbaz");
 

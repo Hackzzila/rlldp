@@ -293,11 +293,12 @@ fn test_encode_decode(du: DataUnit) {
 
 #[test]
 fn basic_encode_decode() {
+  use std::net::{IpAddr, Ipv4Addr};
+
   use crate::lldp::tlv::{
     org::dot3::{AutoNegotiationCapability, AutoNegotiationStatus, MacPhyStatus, MauType},
     ManagementInterfaceKind, NetworkAddress,
   };
-  use std::net::{IpAddr, Ipv4Addr};
 
   test_encode_decode(DataUnit {
     chassis_id: ChassisId::Local("chassis".into()),
