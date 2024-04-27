@@ -19,7 +19,7 @@ pub enum DataUnitError {
   RawTlvError(#[from] RawTlvError),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DataUnit<'a> {
   pub time_to_live: u8,
   pub device_id: Option<Cow<'a, str>>,
