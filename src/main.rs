@@ -1,7 +1,8 @@
 use std::error::Error;
 
-use rawsocket::{bsd::sync::BpfSocket, rustix::net::Protocol, EthernetPacket, MacAddress};
-use rlldp::{lldp::du::DataUnit, MacHeader, LLDP_TYPE};
+use lldp_parser::lldp::du::DataUnit;
+use rawsocket::{bsd::sync::BpfSocket, EthernetPacket, MacAddress};
+use rlldp::{MacHeader, LLDP_TYPE};
 
 const LLDP_MAC_1: MacAddress = MacAddress([0x01, 0x80, 0xc2, 0x00, 0x00, 0x0e]);
 const LLDP_MAC_2: MacAddress = MacAddress([0x01, 0x80, 0xc2, 0x00, 0x00, 0x03]);

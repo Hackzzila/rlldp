@@ -6,14 +6,10 @@ use std::{
   time::{Duration, Instant, SystemTime},
 };
 
-use common::{DataUnit, Protocol};
+use lldp_parser::{DataUnit, Protocol};
 use rawsocket::{bpf::bpf_program, bpf_filter, bsd::tokio::BpfSocket, EthernetPacket};
 use tokio::{sync::RwLock, task::AbortHandle};
 use tracing::{debug, info, instrument, span, warn, Instrument, Level};
-
-pub mod cdp;
-pub mod common;
-pub mod lldp;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -154,7 +150,7 @@ impl Interface {
       for packet in sock.read_iter(&mut buf).await.unwrap() {
         let eth = EthernetPacket::try_decode(packet.capture).unwrap();
         let du: DataUnit = if eth.header.ether_type == 0xcc88 {
-          match lldp::du::DataUnit::decode(eth.payload) {
+          match lldp_parser::lldp::du::DataUnit::decode(eth.payload) {
             Ok(x) => x.into(),
             Err(err) => {
               warn!(%err, "failed to decode lldp du");
@@ -162,7 +158,7 @@ impl Interface {
             }
           }
         } else if eth.header.ether_type == 49665 {
-          match cdp::DataUnit::decode(&eth.payload[8..]) {
+          match lldp_parser::cdp::DataUnit::decode(&eth.payload[8..]) {
             Ok(x) => x.into(),
             Err(err) => {
               warn!(%err, "failed to decode cdp du");

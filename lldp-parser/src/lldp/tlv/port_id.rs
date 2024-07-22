@@ -1,7 +1,6 @@
 use std::{borrow::Cow, cmp::Ordering};
 
 use super::{NetworkAddress, TlvDecodeError};
-use crate::MacAddress;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PortIdKind {
@@ -48,7 +47,7 @@ impl From<PortIdKind> for u8 {
 pub enum PortId<'a> {
   InterfaceAlias(Cow<'a, str>),
   PortComponent(Cow<'a, str>),
-  MacAddress(MacAddress),
+  MacAddress([u8; 6]),
   NetworkAddress(NetworkAddress<'a>),
   InterfaceName(Cow<'a, str>),
   AgentCircuitId(Cow<'a, [u8]>),
@@ -102,7 +101,7 @@ impl<'a> PortId<'a> {
         Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
         Ordering::Equal => {
           let mac = buf[0..6].try_into().unwrap();
-          Ok(PortId::MacAddress(MacAddress(mac)))
+          Ok(PortId::MacAddress(mac))
         }
       },
     }
@@ -127,7 +126,7 @@ impl<'a> PortId<'a> {
         buf.extend(x.as_bytes())
       }
 
-      Self::MacAddress(mac) => buf.extend(mac.0),
+      Self::MacAddress(mac) => buf.extend(mac),
       Self::NetworkAddress(x) => x.encode(buf),
       Self::AgentCircuitId(x) => buf.extend(x.iter()),
     }
@@ -146,7 +145,7 @@ fn basic_encode_decode() {
   super::test_encode_decode(Tlv::PortId(PortId::InterfaceName(cow.clone())));
   super::test_encode_decode(Tlv::PortId(PortId::PortComponent(cow.clone())));
   super::test_encode_decode(Tlv::PortId(PortId::Local(cow.clone())));
-  super::test_encode_decode(Tlv::PortId(PortId::MacAddress(MacAddress([12, 34, 56, 78, 90, 12]))));
+  super::test_encode_decode(Tlv::PortId(PortId::MacAddress([12, 34, 56, 78, 90, 12])));
   super::test_encode_decode(Tlv::PortId(PortId::AgentCircuitId(vec![1, 2, 3, 4].into())));
 
   super::test_encode_decode(Tlv::PortId(PortId::NetworkAddress(NetworkAddress::Ip(IpAddr::V4(

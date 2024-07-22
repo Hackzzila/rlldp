@@ -5,10 +5,16 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[workspace]
+members = ["lldp-parser"]
+
 [dependencies]
 bitflags = "2.5.0"
 libc = "0.2.153"
-rawsocket = { version = "0.1.0", path = "../rawsocket" }
+rawsocket = { version = "0.1.0", path = "../rawsocket", features = ["tokio"] }
 thiserror = "1.0.58"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
+lldp-parser = { path = "./lldp-parser" }
+tokio = { version = "1.38.1", features = ["full"] }
+

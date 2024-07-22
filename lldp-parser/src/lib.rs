@@ -1,9 +1,10 @@
 use std::borrow::Cow;
 
-use crate::{
-  cdp::DataUnit as CdpDu,
-  lldp::{du::DataUnit as LLdpDu, tlv::PortId},
-};
+pub mod cdp;
+pub mod lldp;
+
+use cdp::DataUnit as CdpDu;
+use lldp::{du::DataUnit as LLdpDu, tlv::PortId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Protocol {

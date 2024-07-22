@@ -1,7 +1,6 @@
 use std::{borrow::Cow, cmp::Ordering};
 
 use super::{NetworkAddress, TlvDecodeError};
-use crate::MacAddress;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChassisIdKind {
@@ -49,7 +48,7 @@ pub enum ChassisId<'a> {
   Chassis(Cow<'a, str>),
   InterfaceAlias(Cow<'a, str>),
   PortComponent(Cow<'a, str>),
-  MacAddress(MacAddress),
+  MacAddress([u8; 6]),
   NetworkAddress(NetworkAddress<'a>),
   InterfaceName(Cow<'a, str>),
   Local(Cow<'a, str>),
@@ -101,7 +100,7 @@ impl<'a> ChassisId<'a> {
         Ordering::Greater => Err(TlvDecodeError::BufferTooLong),
         Ordering::Equal => {
           let mac = buf[0..6].try_into().unwrap();
-          Ok(ChassisId::MacAddress(MacAddress(mac)))
+          Ok(ChassisId::MacAddress(mac))
         }
       },
     }
@@ -127,7 +126,7 @@ impl<'a> ChassisId<'a> {
         buf.extend(x.as_bytes())
       }
 
-      Self::MacAddress(mac) => buf.extend(mac.0),
+      Self::MacAddress(mac) => buf.extend(mac),
       Self::NetworkAddress(x) => x.encode(buf),
     }
   }
@@ -146,9 +145,7 @@ fn basic_encode_decode() {
   super::test_encode_decode(Tlv::ChassisId(ChassisId::InterfaceName(cow.clone())));
   super::test_encode_decode(Tlv::ChassisId(ChassisId::PortComponent(cow.clone())));
   super::test_encode_decode(Tlv::ChassisId(ChassisId::Local(cow.clone())));
-  super::test_encode_decode(Tlv::ChassisId(ChassisId::MacAddress(MacAddress([
-    12, 34, 56, 78, 90, 12,
-  ]))));
+  super::test_encode_decode(Tlv::ChassisId(ChassisId::MacAddress([12, 34, 56, 78, 90, 12])));
 
   super::test_encode_decode(Tlv::ChassisId(ChassisId::NetworkAddress(NetworkAddress::Ip(
     IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4)),

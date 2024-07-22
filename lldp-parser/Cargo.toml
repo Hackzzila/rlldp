@@ -1,0 +1,9 @@
+[package]
+name = "lldp-parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bitflags = "2.6.0"
+thiserror = "1.0.63"
+tracing = "0.1.40"
